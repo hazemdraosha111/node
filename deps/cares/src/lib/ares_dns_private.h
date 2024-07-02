@@ -32,8 +32,9 @@ ares_bool_t ares_dns_rcode_isvalid(ares_dns_rcode_t rcode);
 ares_bool_t ares_dns_flags_arevalid(unsigned short flags);
 ares_bool_t ares_dns_rec_type_isvalid(ares_dns_rec_type_t type,
                                       ares_bool_t         is_query);
-ares_bool_t ares_dns_class_isvalid(ares_dns_class_t qclass,
-                                   ares_bool_t      is_query);
+ares_bool_t ares_dns_class_isvalid(ares_dns_class_t    qclass,
+                                   ares_dns_rec_type_t type,
+                                   ares_bool_t         is_query);
 ares_bool_t ares_dns_section_isvalid(ares_dns_section_t sect);
 ares_status_t ares_dns_rr_set_str_own(ares_dns_rr_t    *dns_rr,
                                       ares_dns_rr_key_t key, char *val);
@@ -48,6 +49,33 @@ ares_status_t ares_dns_record_rr_prealloc(ares_dns_record_t *dnsrec,
 ares_bool_t   ares_dns_has_opt_rr(const ares_dns_record_t *rec);
 void          ares_dns_record_write_ttl_decrement(ares_dns_record_t *dnsrec,
                                                   unsigned int       ttl_decrement);
+
+/*! Create a DNS record object for a query. The arguments are the same as
+ *  those for ares_create_query().
+ *
+ *  \param[out] dnsrec       DNS record object to create.
+ *  \param[in]  name         NUL-terminated name for the query.
+ *  \param[in]  dnsclass     Class for the query.
+ *  \param[in]  type         Type for the query.
+ *  \param[in]  id           Identifier for the query.
+ *  \param[in]  flags        Flags for the query.
+ *  \param[in]  max_udp_size Maximum size of a UDP packet for EDNS.
+ *  \return ARES_SUCCESS on success, otherwise an error code.
+ */
+ares_status_t
+  ares_dns_record_create_query(ares_dns_record_t **dnsrec, const char *name,
+                               ares_dns_class_t    dnsclass,
+                               ares_dns_rec_type_t type, unsigned short id,
+                               ares_dns_flags_t flags, size_t max_udp_size);
+
+/*! Convert the RCODE and ANCOUNT from a DNS query reply into a status code.
+ *
+ *  \param[in] rcode   The RCODE from the reply.
+ *  \param[in] ancount The ANCOUNT from the reply.
+ *  \return An appropriate status code.
+ */
+ares_status_t ares_dns_query_reply_tostatus(ares_dns_rcode_t rcode,
+                                            size_t           ancount);
 
 struct ares_dns_qd {
   char               *name;
@@ -95,6 +123,19 @@ typedef struct {
   char  *data;
   size_t data_len;
 } ares__dns_txt_t;
+
+typedef struct {
+  unsigned short type_covered;
+  unsigned char  algorithm;
+  unsigned char  labels;
+  unsigned int   original_ttl;
+  unsigned int   expiration;
+  unsigned int   inception;
+  unsigned short key_tag;
+  char          *signers_name;
+  unsigned char *signature;
+  size_t         signature_len;
+} ares__dns_sig_t;
 
 typedef struct {
   struct ares_in6_addr addr;
@@ -189,6 +230,7 @@ struct ares_dns_rr {
     ares__dns_hinfo_t  hinfo;
     ares__dns_mx_t     mx;
     ares__dns_txt_t    txt;
+    ares__dns_sig_t    sig;
     ares__dns_aaaa_t   aaaa;
     ares__dns_srv_t    srv;
     ares__dns_naptr_t  naptr;

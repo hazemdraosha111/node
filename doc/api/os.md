@@ -9,7 +9,11 @@
 The `node:os` module provides operating system-related utility methods and
 properties. It can be accessed using:
 
-```js
+```mjs
+import os from 'node:os';
+```
+
+```cjs
 const os = require('node:os');
 ```
 
@@ -91,7 +95,7 @@ The properties included on each object include:
   * `idle` {number} The number of milliseconds the CPU has spent in idle mode.
   * `irq` {number} The number of milliseconds the CPU has spent in irq mode.
 
-<!-- eslint-disable semi -->
+<!-- eslint-disable @stylistic/js/semi -->
 
 ```js
 [

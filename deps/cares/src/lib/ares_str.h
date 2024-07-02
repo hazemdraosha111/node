@@ -24,8 +24,8 @@
  *
  * SPDX-License-Identifier: MIT
  */
-#ifndef HEADER_CARES_STRDUP_H
-#define HEADER_CARES_STRDUP_H
+#ifndef __ARES_STR_H
+#define __ARES_STR_H
 
 #include "ares_setup.h"
 #include "ares.h"
@@ -48,8 +48,32 @@ size_t        ares_strcpy(char *dest, const char *src, size_t dest_size);
 
 ares_bool_t   ares_str_isnum(const char *str);
 
+void          ares__str_ltrim(char *str);
+void          ares__str_rtrim(char *str);
+void          ares__str_trim(char *str);
+
 unsigned char ares__tolower(unsigned char c);
 ares_bool_t   ares__memeq_ci(const unsigned char *ptr, const unsigned char *val,
                              size_t len);
 
-#endif /* HEADER_CARES_STRDUP_H */
+ares_bool_t   ares__isspace(int ch);
+ares_bool_t   ares__isprint(int ch);
+ares_bool_t   ares__is_hostnamech(int ch);
+
+ares_bool_t   ares__is_hostname(const char *str);
+
+/*! Validate the string provided is printable.  The length specified must be
+ *  at least the size of the buffer provided.  If a NULL-terminator is hit
+ *  before the length provided is hit, this will not be considered a valid
+ *  printable string.  This does not validate that the string is actually
+ *  NULL terminated.
+ *
+ *  \param[in] str  Buffer containing string to evaluate.
+ *  \param[in] len  Number of characters to evaluate within provided buffer.
+ *                  If 0, will return TRUE since it did not hit an exception.
+ *  \return ARES_TRUE if the entire string is printable, ARES_FALSE if not.
+ */
+ares_bool_t   ares__str_isprint(const char *str, size_t len);
+
+
+#endif /* __ARES_STR_H */

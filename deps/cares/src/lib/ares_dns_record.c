@@ -148,6 +148,11 @@ static void ares__dns_rr_free(ares_dns_rr_t *rr)
       ares_free(rr->r.txt.data);
       break;
 
+    case ARES_REC_TYPE_SIG:
+      ares_free(rr->r.sig.signers_name);
+      ares_free(rr->r.sig.signature);
+      break;
+
     case ARES_REC_TYPE_SRV:
       ares_free(rr->r.srv.target);
       break;
@@ -245,7 +250,7 @@ ares_status_t ares_dns_record_query_add(ares_dns_record_t  *dnsrec,
 
   if (dnsrec == NULL || name == NULL ||
       !ares_dns_rec_type_isvalid(qtype, ARES_TRUE) ||
-      !ares_dns_class_isvalid(qclass, ARES_TRUE)) {
+      !ares_dns_class_isvalid(qclass, qtype, ARES_TRUE)) {
     return ARES_EFORMERR;
   }
 
@@ -273,6 +278,39 @@ ares_status_t ares_dns_record_query_add(ares_dns_record_t  *dnsrec,
   dnsrec->qd[idx].qtype  = qtype;
   dnsrec->qd[idx].qclass = qclass;
   dnsrec->qdcount++;
+  return ARES_SUCCESS;
+}
+
+ares_status_t ares_dns_record_query_set_name(ares_dns_record_t *dnsrec,
+                                             size_t idx, const char *name)
+{
+  char *orig_name = NULL;
+
+  if (dnsrec == NULL || idx >= dnsrec->qdcount || name == NULL) {
+    return ARES_EFORMERR;
+  }
+  orig_name            = dnsrec->qd[idx].name;
+  dnsrec->qd[idx].name = ares_strdup(name);
+  if (dnsrec->qd[idx].name == NULL) {
+    dnsrec->qd[idx].name = orig_name; /* LCOV_EXCL_LINE: OutOfMemory */
+    return ARES_ENOMEM; /* LCOV_EXCL_LINE: OutOfMemory */
+  }
+
+  ares_free(orig_name);
+  return ARES_SUCCESS;
+}
+
+ares_status_t ares_dns_record_query_set_type(ares_dns_record_t  *dnsrec,
+                                             size_t              idx,
+                                             ares_dns_rec_type_t qtype)
+{
+  if (dnsrec == NULL || idx >= dnsrec->qdcount ||
+      !ares_dns_rec_type_isvalid(qtype, ARES_TRUE)) {
+    return ARES_EFORMERR;
+  }
+
+  dnsrec->qd[idx].qtype = qtype;
+
   return ARES_SUCCESS;
 }
 
@@ -316,7 +354,7 @@ size_t ares_dns_record_rr_cnt(const ares_dns_record_t *dnsrec,
       return dnsrec->arcount;
   }
 
-  return 0;
+  return 0; /* LCOV_EXCL_LINE: DefensiveCoding */
 }
 
 ares_status_t ares_dns_record_rr_prealloc(ares_dns_record_t *dnsrec,
@@ -327,7 +365,7 @@ ares_status_t ares_dns_record_rr_prealloc(ares_dns_record_t *dnsrec,
   ares_dns_rr_t  *temp     = NULL;
 
   if (dnsrec == NULL || cnt == 0 || !ares_dns_section_isvalid(sect)) {
-    return ARES_EFORMERR;
+    return ARES_EFORMERR; /* LCOV_EXCL_LINE: DefensiveCoding */
   }
 
   switch (sect) {
@@ -379,7 +417,7 @@ ares_status_t ares_dns_record_rr_add(ares_dns_rr_t    **rr_out,
   if (dnsrec == NULL || name == NULL || rr_out == NULL ||
       !ares_dns_section_isvalid(sect) ||
       !ares_dns_rec_type_isvalid(type, ARES_FALSE) ||
-      !ares_dns_class_isvalid(rclass, ARES_FALSE)) {
+      !ares_dns_class_isvalid(rclass, type, ARES_FALSE)) {
     return ARES_EFORMERR;
   }
 
@@ -402,7 +440,7 @@ ares_status_t ares_dns_record_rr_add(ares_dns_rr_t    **rr_out,
 
   status = ares_dns_record_rr_prealloc(dnsrec, sect, *rr_len + 1);
   if (status != ARES_SUCCESS) {
-    return status;
+    return status; /* LCOV_EXCL_LINE: OutOfMemory */
   }
 
   idx = *rr_len;
@@ -499,7 +537,7 @@ ares_dns_rr_t *ares_dns_record_rr_get(ares_dns_record_t *dnsrec,
   return &rr_ptr[idx];
 }
 
-static const ares_dns_rr_t *
+const ares_dns_rr_t *
   ares_dns_record_rr_get_const(const ares_dns_record_t *dnsrec,
                                ares_dns_section_t sect, size_t idx)
 {
@@ -542,7 +580,7 @@ static void *ares_dns_rr_data_ptr(ares_dns_rr_t *dns_rr, ares_dns_rr_key_t key,
                                   size_t **lenptr)
 {
   if (dns_rr == NULL || dns_rr->type != ares_dns_rr_key_to_rec_type(key)) {
-    return NULL;
+    return NULL; /* LCOV_EXCL_LINE: DefensiveCoding */
   }
 
   switch (key) {
@@ -593,6 +631,37 @@ static void *ares_dns_rr_data_ptr(ares_dns_rr_t *dns_rr, ares_dns_rr_key_t key,
 
     case ARES_RR_MX_EXCHANGE:
       return &dns_rr->r.mx.exchange;
+
+    case ARES_RR_SIG_TYPE_COVERED:
+      return &dns_rr->r.sig.type_covered;
+
+    case ARES_RR_SIG_ALGORITHM:
+      return &dns_rr->r.sig.algorithm;
+
+    case ARES_RR_SIG_LABELS:
+      return &dns_rr->r.sig.labels;
+
+    case ARES_RR_SIG_ORIGINAL_TTL:
+      return &dns_rr->r.sig.original_ttl;
+
+    case ARES_RR_SIG_EXPIRATION:
+      return &dns_rr->r.sig.expiration;
+
+    case ARES_RR_SIG_INCEPTION:
+      return &dns_rr->r.sig.inception;
+
+    case ARES_RR_SIG_KEY_TAG:
+      return &dns_rr->r.sig.key_tag;
+
+    case ARES_RR_SIG_SIGNERS_NAME:
+      return &dns_rr->r.sig.signers_name;
+
+    case ARES_RR_SIG_SIGNATURE:
+      if (lenptr == NULL) {
+        return NULL;
+      }
+      *lenptr = &dns_rr->r.sig.signature_len;
+      return &dns_rr->r.sig.signature;
 
     case ARES_RR_TXT_DATA:
       if (lenptr == NULL) {
@@ -1313,4 +1382,104 @@ ares_bool_t ares_dns_has_opt_rr(const ares_dns_record_t *rec)
     }
   }
   return ARES_FALSE;
+}
+
+/* Construct a DNS record for a name with given class and type. Used internally
+ * by ares_search() and ares_create_query().
+ */
+ares_status_t
+  ares_dns_record_create_query(ares_dns_record_t **dnsrec, const char *name,
+                               ares_dns_class_t    dnsclass,
+                               ares_dns_rec_type_t type, unsigned short id,
+                               ares_dns_flags_t flags, size_t max_udp_size)
+{
+  ares_status_t  status;
+  ares_dns_rr_t *rr = NULL;
+
+  if (dnsrec == NULL) {
+    return ARES_EFORMERR;
+  }
+
+  *dnsrec = NULL;
+
+  /* Per RFC 7686, reject queries for ".onion" domain names with NXDOMAIN */
+  if (ares__is_onion_domain(name)) {
+    status = ARES_ENOTFOUND;
+    goto done;
+  }
+
+  status = ares_dns_record_create(dnsrec, id, (unsigned short)flags,
+                                  ARES_OPCODE_QUERY, ARES_RCODE_NOERROR);
+  if (status != ARES_SUCCESS) {
+    goto done;
+  }
+
+  status = ares_dns_record_query_add(*dnsrec, name, type, dnsclass);
+  if (status != ARES_SUCCESS) {
+    goto done;
+  }
+
+  /* max_udp_size > 0 indicates EDNS, so send OPT RR as an additional record */
+  if (max_udp_size > 0) {
+    /* max_udp_size must fit into a 16 bit unsigned integer field on the OPT
+     * RR, so check here that it fits
+     */
+    if (max_udp_size > 65535) {
+      status = ARES_EFORMERR;
+      goto done;
+    }
+
+    status = ares_dns_record_rr_add(&rr, *dnsrec, ARES_SECTION_ADDITIONAL, "",
+                                    ARES_REC_TYPE_OPT, ARES_CLASS_IN, 0);
+    if (status != ARES_SUCCESS) {
+      goto done;
+    }
+
+    status = ares_dns_rr_set_u16(rr, ARES_RR_OPT_UDP_SIZE,
+                                 (unsigned short)max_udp_size);
+    if (status != ARES_SUCCESS) {
+      goto done;
+    }
+
+    status = ares_dns_rr_set_u8(rr, ARES_RR_OPT_VERSION, 0);
+    if (status != ARES_SUCCESS) {
+      goto done;
+    }
+
+    status = ares_dns_rr_set_u16(rr, ARES_RR_OPT_FLAGS, 0);
+    if (status != ARES_SUCCESS) {
+      goto done;
+    }
+  }
+
+done:
+  if (status != ARES_SUCCESS) {
+    ares_dns_record_destroy(*dnsrec);
+    *dnsrec = NULL;
+  }
+  return status;
+}
+
+ares_dns_record_t *ares_dns_record_duplicate(const ares_dns_record_t *dnsrec)
+{
+  unsigned char     *data     = NULL;
+  size_t             data_len = 0;
+  ares_dns_record_t *out      = NULL;
+  ares_status_t      status;
+
+  if (dnsrec == NULL) {
+    return NULL;
+  }
+
+  status = ares_dns_write(dnsrec, &data, &data_len);
+  if (status != ARES_SUCCESS) {
+    return NULL;
+  }
+
+  status = ares_dns_parse(data, data_len, 0, &out);
+  ares_free(data);
+  if (status != ARES_SUCCESS) {
+    return NULL;
+  }
+  return out;
 }

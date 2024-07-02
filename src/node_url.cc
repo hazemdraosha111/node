@@ -6,6 +6,7 @@
 #include "node_i18n.h"
 #include "node_metadata.h"
 #include "node_process-inl.h"
+#include "path.h"
 #include "util-inl.h"
 #include "v8-fast-api-calls.h"
 #include "v8.h"
@@ -233,6 +234,9 @@ void BindingData::Parse(const FunctionCallbackInfo<Value>& args) {
   CHECK_GE(args.Length(), 1);
   CHECK(args[0]->IsString());  // input
   // args[1] // base url
+  // args[2] // raise Exception
+
+  const bool raise_exception = args.Length() > 2 && args[2]->IsTrue();
 
   Realm* realm = Realm::GetCurrent(args);
   BindingData* binding_data = realm->GetBindingData<BindingData>();
@@ -245,16 +249,20 @@ void BindingData::Parse(const FunctionCallbackInfo<Value>& args) {
   if (args[1]->IsString()) {
     base_ = Utf8Value(isolate, args[1]).ToString();
     base = ada::parse<ada::url_aggregator>(*base_);
-    if (!base) {
+    if (!base && raise_exception) {
       return ThrowInvalidURL(realm->env(), input.ToStringView(), base_);
+    } else if (!base) {
+      return;
     }
     base_pointer = &base.value();
   }
   auto out =
       ada::parse<ada::url_aggregator>(input.ToStringView(), base_pointer);
 
-  if (!out) {
+  if (!out && raise_exception) {
     return ThrowInvalidURL(realm->env(), input.ToStringView(), base_);
+  } else if (!out) {
+    return;
   }
 
   binding_data->UpdateComponents(out->get_components(), out->type);
@@ -534,19 +542,6 @@ std::optional<std::string> FileURLToPath(Environment* env,
 
   return ada::unicode::percent_decode(pathname, first_percent);
 #endif  // _WIN32
-}
-
-// Reverse the logic applied by path.toNamespacedPath() to create a
-// namespace-prefixed path.
-void FromNamespacedPath(std::string* path) {
-#ifdef _WIN32
-  if (path->compare(0, 8, "\\\\?\\UNC\\", 8) == 0) {
-    *path = path->substr(8);
-    path->insert(0, "\\\\");
-  } else if (path->compare(0, 4, "\\\\?\\", 4) == 0) {
-    *path = path->substr(4);
-  }
-#endif
 }
 
 }  // namespace url

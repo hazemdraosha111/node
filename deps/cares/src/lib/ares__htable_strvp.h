@@ -49,7 +49,7 @@ typedef struct ares__htable_strvp ares__htable_strvp_t;
  *
  *  \param[in] val  user-supplied value
  */
-typedef void                      (*ares__htable_strvp_val_free_t)(void *val);
+typedef void (*ares__htable_strvp_val_free_t)(void *val);
 
 /*! Destroy hashtable
  *
@@ -115,4 +115,4 @@ size_t      ares__htable_strvp_num_keys(const ares__htable_strvp_t *htable);
 
 /*! @} */
 
-#endif /* __ARES__HTABLE_STVP_H */
+#endif /* __ARES__HTABLE_STRVP_H */

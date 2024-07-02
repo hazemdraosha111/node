@@ -51,6 +51,7 @@ typedef enum {
   ARES_REC_TYPE_HINFO = 13,    /*!< Host information. */
   ARES_REC_TYPE_MX    = 15,    /*!< Mail routing information. */
   ARES_REC_TYPE_TXT   = 16,    /*!< Text strings. */
+  ARES_REC_TYPE_SIG   = 24,    /*!< RFC 2535 / RFC 2931. SIG Record */
   ARES_REC_TYPE_AAAA  = 28,    /*!< RFC 3596. Ip6 Address. */
   ARES_REC_TYPE_SRV   = 33,    /*!< RFC 2782. Server Selection. */
   ARES_REC_TYPE_NAPTR = 35,    /*!< RFC 3403. Naming Authority Pointer */
@@ -208,6 +209,24 @@ typedef enum {
   ARES_RR_MX_EXCHANGE = (ARES_REC_TYPE_MX * 100) + 2,
   /*! TXT Record. Data. Datatype: BINP */
   ARES_RR_TXT_DATA = (ARES_REC_TYPE_TXT * 100) + 1,
+  /*! SIG Record. Type Covered. Datatype: U16 */
+  ARES_RR_SIG_TYPE_COVERED = (ARES_REC_TYPE_SIG * 100) + 1,
+  /*! SIG Record. Algorithm. Datatype: U8 */
+  ARES_RR_SIG_ALGORITHM = (ARES_REC_TYPE_SIG * 100) + 2,
+  /*! SIG Record. Labels. Datatype: U8 */
+  ARES_RR_SIG_LABELS = (ARES_REC_TYPE_SIG * 100) + 3,
+  /*! SIG Record. Original TTL. Datatype: U32 */
+  ARES_RR_SIG_ORIGINAL_TTL = (ARES_REC_TYPE_SIG * 100) + 4,
+  /*! SIG Record. Signature Expiration. Datatype: U32 */
+  ARES_RR_SIG_EXPIRATION = (ARES_REC_TYPE_SIG * 100) + 5,
+  /*! SIG Record. Signature Inception. Datatype: U32 */
+  ARES_RR_SIG_INCEPTION = (ARES_REC_TYPE_SIG * 100) + 6,
+  /*! SIG Record. Key Tag. Datatype: U16 */
+  ARES_RR_SIG_KEY_TAG = (ARES_REC_TYPE_SIG * 100) + 7,
+  /*! SIG Record. Signers Name. Datatype: NAME */
+  ARES_RR_SIG_SIGNERS_NAME = (ARES_REC_TYPE_SIG * 100) + 8,
+  /*! SIG Record. Signature. Datatype: BIN */
+  ARES_RR_SIG_SIGNATURE = (ARES_REC_TYPE_SIG * 100) + 9,
   /*! AAAA Record. Address. Datatype: INADDR6 */
   ARES_RR_AAAA_ADDR = (ARES_REC_TYPE_AAAA * 100) + 1,
   /*! SRV Record. Priority. Datatype: U16 */
@@ -393,11 +412,11 @@ typedef enum {
   /*! Parse Additional from RFC 1035 that allow name compression as RAW */
   ARES_DNS_PARSE_AR_BASE_RAW = 1 << 2,
   /*! Parse Answers from later RFCs (no name compression) RAW */
-  ARES_DNS_PARSE_AN_EXT_RAW  = 1 << 3,
+  ARES_DNS_PARSE_AN_EXT_RAW = 1 << 3,
   /*! Parse Authority from later RFCs (no name compression) as RAW */
-  ARES_DNS_PARSE_NS_EXT_RAW  = 1 << 4,
-  /*< Parse Additional from later RFCs (no name compression) as RAW */
-  ARES_DNS_PARSE_AR_EXT_RAW  = 1 << 5
+  ARES_DNS_PARSE_NS_EXT_RAW = 1 << 4,
+  /*! Parse Additional from later RFCs (no name compression) as RAW */
+  ARES_DNS_PARSE_AR_EXT_RAW = 1 << 5
 } ares_dns_parse_flags_t;
 
 /*! String representation of DNS Record Type
@@ -468,7 +487,7 @@ CARES_EXTERN const char *ares_dns_rcode_tostr(ares_dns_rcode_t rcode);
  *  \param[in]     ipaddr  ASCII string form of the ip address
  *  \param[in,out] addr    Must set "family" member to one of AF_UNSPEC,
  *                         AF_INET, AF_INET6 on input.
- *  \param[out]    ptr_len Length of binary form address
+ *  \param[out]    out_len Length of binary form address
  *  \return Pointer to start of binary address or NULL on error.
  */
 CARES_EXTERN const void *ares_dns_pton(const char       *ipaddr,
@@ -619,6 +638,32 @@ CARES_EXTERN ares_status_t ares_dns_record_query_add(ares_dns_record_t  *dnsrec,
                                                      ares_dns_rec_type_t qtype,
                                                      ares_dns_class_t qclass);
 
+/*! Replace the question name with a new name.  This may be used when performing
+ *  a search with aliases.
+ *
+ *  Note that this will invalidate the name pointer returned from
+ *  ares_dns_record_query_get().
+ *
+ * \param[in] dnsrec  Initialized record object
+ * \param[in] idx     Index of question (typically 0)
+ * \param[in] name    Name to use as replacement.
+ * \return ARES_SUCCESS on success
+ */
+CARES_EXTERN ares_status_t ares_dns_record_query_set_name(
+  ares_dns_record_t *dnsrec, size_t idx, const char *name);
+
+
+/*! Replace the question type with a different type.  This may be used when
+ *  needing to query more than one address class (e.g. A and AAAA)
+ *
+ * \param[in] dnsrec  Initialized record object
+ * \param[in] idx     Index of question (typically 0)
+ * \param[in] qtype   Record Type to use as replacement.
+ * \return ARES_SUCCESS on success
+ */
+CARES_EXTERN ares_status_t ares_dns_record_query_set_type(
+  ares_dns_record_t *dnsrec, size_t idx, ares_dns_rec_type_t qtype);
+
 /*! Get the count of queries in the DNS Record
  *
  * \param[in] dnsrec  Initialized record object
@@ -631,6 +676,8 @@ CARES_EXTERN size_t ares_dns_record_query_cnt(const ares_dns_record_t *dnsrec);
  * \param[in]  dnsrec  Initialized record object
  * \param[in]  idx     Index of query
  * \param[out] name    Optional.  Returns name, may pass NULL if not desired.
+ *                     This pointer will be invalided by any call to
+ *                     ares_dns_record_query_set_name().
  * \param[out] qtype   Optional.  Returns record type, may pass NULL.
  * \param[out] qclass  Optional.  Returns class, may pass NULL.
  * \return ARES_SUCCESS on success
@@ -667,16 +714,27 @@ CARES_EXTERN ares_status_t ares_dns_record_rr_add(
   const char *name, ares_dns_rec_type_t type, ares_dns_class_t rclass,
   unsigned int ttl);
 
-/*! Fetch a resource record based on the section and index.
+/*! Fetch a writable resource record based on the section and index.
  *
  *  \param[in]  dnsrec   Initialized record object
  *  \param[in]  sect     Section for resource record
  *  \param[in]  idx      Index of resource record in section
- *  \return NULL on misuse, otherwise a pointer to the resource record
+ *  \return NULL on misuse, otherwise a writable pointer to the resource record
  */
 CARES_EXTERN ares_dns_rr_t *ares_dns_record_rr_get(ares_dns_record_t *dnsrec,
                                                    ares_dns_section_t sect,
                                                    size_t             idx);
+
+/*! Fetch a non-writeable resource record based on the section and index.
+ *
+ *  \param[in]  dnsrec   Initialized record object
+ *  \param[in]  sect     Section for resource record
+ *  \param[in]  idx      Index of resource record in section
+ *  \return NULL on misuse, otherwise a const pointer to the resource record
+ */
+CARES_EXTERN const ares_dns_rr_t *
+  ares_dns_record_rr_get_const(const ares_dns_record_t *dnsrec,
+                               ares_dns_section_t sect, size_t idx);
 
 
 /*! Remove the resource record based on the section and index
@@ -686,9 +744,9 @@ CARES_EXTERN ares_dns_rr_t *ares_dns_record_rr_get(ares_dns_record_t *dnsrec,
  *  \param[in]  idx      Index of resource record in section
  *  \return ARES_SUCCESS on success, otherwise an error code.
  */
-CARES_EXTERN ares_status_t  ares_dns_record_rr_del(ares_dns_record_t *dnsrec,
-                                                   ares_dns_section_t sect,
-                                                   size_t             idx);
+CARES_EXTERN ares_status_t ares_dns_record_rr_del(ares_dns_record_t *dnsrec,
+                                                  ares_dns_section_t sect,
+                                                  size_t             idx);
 
 
 /*! Retrieve the resource record Name/Hostname
@@ -696,7 +754,7 @@ CARES_EXTERN ares_status_t  ares_dns_record_rr_del(ares_dns_record_t *dnsrec,
  *  \param[in] rr  Pointer to resource record
  *  \return Name
  */
-CARES_EXTERN const char    *ares_dns_rr_get_name(const ares_dns_rr_t *rr);
+CARES_EXTERN const char   *ares_dns_rr_get_name(const ares_dns_rr_t *rr);
 
 /*! Retrieve the resource record type
  *
@@ -959,8 +1017,19 @@ CARES_EXTERN ares_status_t ares_dns_parse(const unsigned char *buf,
  *  \param[out] buf_len  Length of returned buffer containing DNS message.
  *  \return ARES_SUCCESS on success
  */
-CARES_EXTERN ares_status_t ares_dns_write(ares_dns_record_t *dnsrec,
+CARES_EXTERN ares_status_t ares_dns_write(const ares_dns_record_t *dnsrec,
                                           unsigned char **buf, size_t *buf_len);
+
+
+/*! Duplicate a complete DNS message.  This does not copy internal members
+ *  (such as the ttl decrement capability).
+ *
+ *  \param[in] dnsrec Pointer to initialized and filled DNS record object.
+ *  \return duplicted DNS record object, or NULL on out of memory.
+ */
+CARES_EXTERN ares_dns_record_t *
+  ares_dns_record_duplicate(const ares_dns_record_t *dnsrec);
+
 /*! @} */
 
 #ifdef __cplusplus
